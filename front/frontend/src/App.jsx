@@ -74,7 +74,10 @@ document.head.appendChild(styleTag);
     scene.add(ambientLight);
 
     // SAFE SEQUENCE
-    let sequence = (sequence1 || "").toUpperCase();
+let sequence = result?.data?.alignment?.seq1 || sequence1 || "";
+sequence = sequence.toUpperCase();
+
+const aligned2 = result?.data?.alignment?.seq2 || "";
     let mutationPositions = [];
     let motifPositions = [];
     let motifLength = 0;
@@ -90,7 +93,7 @@ document.head.appendChild(styleTag);
     if (result && result.data && result.data.mutations) {
       mutationPositions = result.data.mutations.map(m => m.pos);
     }
-    sequence = sequence.replace(/[^ATGC]/g, "");
+    sequence = sequence.replace(/[^ATGC-]/g, "");
     if (sequence.length < 5) {
       sequence = "ATGCATGCATGC";
     }
@@ -124,6 +127,7 @@ document.head.appendChild(styleTag);
 
     // CREATE BASE PAIRS AS CLICKABLE MESHES
     for (let i = 0; i < sequence.length; i++) {
+
       const base = sequence[i];
       const isGC = base === "G" || base === "C";
       const angle = i * 0.3;
@@ -139,7 +143,10 @@ document.head.appendChild(styleTag);
       points2.push(new THREE.Vector3(x2, y, z2));
 
       const base1 = sequence[i];
-      const base2 = getComplement(base1);
+      const base2_aligned = aligned2[i] || "-";
+      const isInsertion = base1 === "-" && base2_aligned !== "-";
+      const isDeletion = base1 !== "-" && base2_aligned === "-";
+const base2 = base1 === "-" ? "-" : getComplement(base1);
 
       // MIDPOINT
       const mid = new THREE.Vector3(
@@ -165,18 +172,22 @@ document.head.appendChild(styleTag);
       }
 
       const finalColor =
-        isMutated
-          ? 0xff00ff
-          : isMotif
-            ? 0x00ffff
-            : getBaseColor(base1);
+  isInsertion
+    ? 0xffa500 // orange
+    : isMutated
+      ? 0xff00ff
+      : isMotif
+        ? 0x00ffff
+        : getBaseColor(base1);
 
       const finalEmissive =
-        isMutated
-          ? 0x550055
-          : isMotif
-            ? 0x003333
-            : 0x000000;
+  isInsertion
+    ? 0x552200
+    : isMutated
+      ? 0x550055
+      : isMotif
+        ? 0x003333
+        : 0x000000;
 
       const gcBoost = isGC ? 0.8 : 0.1;
 
@@ -200,10 +211,11 @@ document.head.appendChild(styleTag);
 
       cylinder1.userData = {
         type: 'base_pair_half',
-        base: base1,
-        position: i,
-        strand: 1,
-        complementBase: base2
+  base: base1,
+  position: i,
+  strand: 1,
+  complementBase: base2,
+  mutationType: isInsertion ? "insertion" : isDeletion ? "deletion" : "normal"
       };
 
       group.add(cylinder1);
@@ -217,19 +229,22 @@ document.head.appendChild(styleTag);
       const cylinderGeo2 = new THREE.CylinderGeometry(0.08, 0.08, length2, 8);
 
       const finalColor2 =
-        isMutated
-          ? 0xff00ff
-          : isMotif
-            ? 0x00ffff
-            : getBaseColor(base2);
+  isInsertion
+    ? 0xff8800
+    : isMutated
+      ? 0xff00ff
+      : isMotif
+        ? 0x00ffff
+        : getBaseColor(base2 === "-" ? "A" : base2);
 
       const finalEmissive2 =
-        isMutated
-          ? 0x550055
-          : isMotif
-            ? 0x003333
-            : 0x000000;
-
+  isInsertion
+    ? 0x552200
+    : isMutated
+      ? 0x550055
+      : isMotif
+        ? 0x003333
+        : 0x000000;
 
       const baseComp = base2;
       const isGC2 = baseComp === "G" || baseComp === "C";
@@ -255,11 +270,12 @@ document.head.appendChild(styleTag);
       );
 
       cylinder2.userData = {
-        type: 'base_pair_half',
-        base: base2,
-        position: i,
-        strand: 2,
-        complementBase: base1
+  type: 'base_pair_half',
+  base: base2,
+  position: i,
+  strand: 2,
+  complementBase: base1,
+  mutationType: isInsertion ? "insertion" : isDeletion ? "deletion" : "normal"
       };
 
       group.add(cylinder2);
@@ -387,7 +403,24 @@ const onClick = (event) => {
     };
   }, [sequence1, result, showMutations, showMotifs]);
 
-const getPanelTheme = (base) => {
+const getPanelTheme = (base, mutationType) => {
+
+  if (mutationType === "insertion") {
+    return {
+      border: "#ff8800",
+      glow: "rgba(255,136,0,0.6)",
+      bg: "rgba(255,136,0,0.08)"
+    };
+  }
+
+  if (mutationType === "deletion") {
+    return {
+      border: "#ff4444",
+      glow: "rgba(255,68,68,0.6)",
+      bg: "rgba(255,68,68,0.08)"
+    };
+  }
+
   if (base === "A") return {
     border: "#ffff00",
     glow: "rgba(255,255,0,0.5)",
@@ -413,13 +446,16 @@ const getPanelTheme = (base) => {
   };
 
   return {
-    border: "#fff",
-    glow: "rgba(255,255,255,0.3)",
-    bg: "rgba(255,255,255,0.03)"
+    border: "#888",
+    glow: "rgba(255,255,255,0.2)",
+    bg: "rgba(255,255,255,0.02)"
   };
 };
 
-const theme = getPanelTheme(selectedBase?.base);
+const theme = getPanelTheme(
+  selectedBase?.base || null,
+  selectedBase?.mutationType || null
+);
 
 let selectedMutation = null;
 
@@ -428,6 +464,18 @@ if (selectedBase && result && result.data && result.data.mutations) {
     m => m.pos === selectedBase.position
   );
 }
+
+const interp = result?.data?.interpretation || null;
+
+const riskColor =
+  interp?.risk === "HIGH" ? "#ff0040" :
+  interp?.risk === "LOW" ? "#00ff88" :
+  "#888";
+
+const regionColor =
+  interp?.region === "Coding Region" ? "#00bfff" :
+  interp?.region === "Regulatory Region" ? "#ffaa00" :
+  "#ccc";
 
   return (
 
@@ -633,18 +681,84 @@ if (selectedBase && result && result.data && result.data.mutations) {
             <h3>GC Content</h3>
             <p>{result.data.gc_content.toFixed(2)}%</p>
 
-            <h3>Prediction</h3>
-            <div style={{
-              padding: "10px",
-              border: "1px solid #444",
-              textAlign: "center",
-              fontWeight: "bold"
-            }}>
-              {result.data.prediction === 1
-                ? "HIGH RISK"
-                : "LOW RISK"}
-            </div>
+            <h3>Insertions</h3>
+{result.data.indels
+  .filter(i => i.type === "insertion")
+  .map((ins, idx) => (
+    <div key={idx}>
+      Position {ins.pos}: +{ins.base}
+    </div>
+))}
 
+<h3>Deletions</h3>
+{result.data.indels
+  .filter(i => i.type === "deletion")
+  .length > 0 ? (
+    result.data.indels
+      .filter(i => i.type === "deletion")
+      .map((del, idx) => (
+        <div key={idx}>
+          Position {del.pos}: Deleted
+        </div>
+      ))
+  ) : (
+    <p>No deletions</p>
+)}
+
+
+<h3>Interpretation</h3>
+
+
+<div style={{
+  marginTop: "10px",
+  padding: "14px",
+  border: `1px solid ${riskColor}`,
+  borderRadius: "8px",
+  background: "#050505",
+  boxShadow: `0 0 20px ${riskColor}33`,
+  transition: "all 0.3s ease"
+}}>
+
+<div>
+  <b>Risk Type:</b> 
+  <span style={{ color: riskColor, fontWeight: "bold" }}>
+    {interp.risk}
+  </span>
+</div>
+
+<div>
+  <b>Mutation Type:</b> {interp.type}
+</div>
+<div>
+
+  <b>Region:</b> 
+  <span style={{ color: regionColor }}>
+    {interp.region}
+  </span>
+</div>
+
+<div>
+  <b>Affected System:</b> {interp.affected_system}
+</div>
+
+<div style={{
+  marginTop: "8px",
+  padding: "8px",
+  background: "#111",
+  borderLeft: `3px solid ${riskColor}`
+}}>
+  <b>Reason:</b> {interp.reason}
+</div>
+
+<div>
+  <b>Clustered:</b> {interp.clustered ? "Yes" : "No"}
+</div>
+
+<div>
+  <b>Motif Impact:</b> {interp.motif_affected ? "Yes" : "No"}
+</div>
+
+</div>
           </div>
         )}
 
@@ -750,6 +864,18 @@ background: selectedMutation ? "#ff00ff" : theme.border,
       ? `${selectedMutation.from} → ${selectedMutation.to}`
       : "None"}
   </span>
+
+  <span style={{ color: "#777" }}>Type</span>
+  <span style={{
+    color:
+      selectedBase?.mutationType === "insertion" ? "#ff8800" :
+      selectedBase?.mutationType === "deletion" ? "#ff4444" :
+      "#888",
+    fontWeight: "bold"
+  }}>
+    {selectedBase?.mutationType || "normal"}
+  </span>
+
 </div>
 
     </div>
