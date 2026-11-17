@@ -1,0 +1,11 @@
+BACKEND:
+     cd C:\Users\Vatsal\Documents\DNA\back
+     venv\Scripts\activate
+     uvicorn app.main:app --reload
+   Wait for: "Uvicorn running on http://127.0.0.1:8000"   (If uvicorn is not recognized: python -m uvicorn app.main:app --reload)
+
+ FRONTEND:
+     cd C:\Users\Vatsal\Documents\DNA\front\frontend
+     npm run dev
+   Wait for: "Local: http://localhost:5173/"
+

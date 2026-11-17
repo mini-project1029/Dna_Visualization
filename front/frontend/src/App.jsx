@@ -1,7 +1,9 @@
+import HumanView from "./HumanView";
 import { useState } from "react";
 import * as THREE from "three";
 import { useEffect, useRef } from "react";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+
 
 function App() {
   const [sequence1, setSequence1] = useState("");
@@ -14,6 +16,7 @@ function App() {
   const gcFactor = gcContent / 100; // 0 → 1
   const [selectedBase, setSelectedBase] = useState(null);
   const styleTag = document.createElement("style");
+  const [viewMode, setViewMode] = useState('dna');
 
 
   const handleFileUpload = (e) => {
@@ -376,14 +379,11 @@ const onClick = (event) => {
     renderer.domElement.addEventListener('mousemove', onMouseMove);
 
 
+    let frameId;
     const animate = () => {
-      requestAnimationFrame(animate);
-
-      
-      group.rotation.y += 0.0035; // keep or remove later
-
-      controls.update(); // REQUIRED
-
+      frameId = requestAnimationFrame(animate);
+      group.rotation.y += 0.0035;
+      controls.update();
       renderer.render(scene, camera);
     };
 
@@ -395,11 +395,12 @@ const onClick = (event) => {
     animate();
 
     return () => {
+      cancelAnimationFrame(frameId);
+      controls.dispose();
       renderer.domElement.removeEventListener('click', onClick);
       renderer.domElement.removeEventListener('mousemove', onMouseMove);
-      if (mountRef.current) {
-        mountRef.current.innerHTML = "";
-      }
+      renderer.dispose();
+      renderer.forceContextLoss();
     };
   }, [sequence1, result, showMutations, showMotifs]);
 
@@ -488,13 +489,15 @@ const regionColor =
     }}>
 
       {/* LEFT PANEL */}
-      <div style={{
-        width: "30%",
-        padding: "24px",
-        borderRight: "1px solid #222",
-        overflowY: "auto",
-        backgroundColor: "#0d0d0d"
-      }}>
+<div style={{
+  flex: "0 0 30%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  padding: "24px",
+  borderRight: "1px solid #222",
+  overflowY: "auto",
+  backgroundColor: "#0d0d0d"
+}}>
 
         <h2>DNA Analyzer</h2>
 
@@ -595,14 +598,18 @@ const regionColor =
           }}
 
           onClick={async () => {
-            const res = await fetch("http://127.0.0.1:8000/analyze", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ sequence1, sequence2, motif })
-            });
-
-            const data = await res.json();
-            setResult(data);
+            try {
+              const res = await fetch("http://127.0.0.1:8000/analyze", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ sequence1, sequence2, motif })
+              });
+              const data = await res.json();
+              if (data.error) { alert(data.error); return; }
+              setResult(data);
+            } catch {
+              alert("Cannot reach backend. Is it running on port 8000?");
+            }
           }}
         >
           ANALYZE
@@ -658,7 +665,7 @@ const regionColor =
         }}>
           RESULTS
         </h3>
-        {result && (
+        {result && result.data && (
           <div style={{ marginTop: "20px" }}>
 
             <h3>Mutations</h3>
@@ -765,125 +772,167 @@ const regionColor =
       </div>
 
       {/* RIGHT PANEL */}
-      <div style={{
-        width: "70%",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        backgroundColor: "#050505",
-        position: "relative",
-        overflow:"hidden"
-      }}>
-        <div style={{
+ {/* RIGHT PANEL */}
+<div style={{
+  flex: "1",
+  minWidth: 0,
+  minHeight: 0,
+  display: "flex",
+  flexDirection: "column",
+  backgroundColor: "#050505",
   position: "relative",
-  width: "90%",
-  height: "90%"
-}}>
-  <div
-    ref={mountRef}
-    style={{
-      width: "100%",
-      height: "100%",
-
-    }}
-  ></div>
-
-  {selectedBase && (
-    <div style={{
-  position: "absolute",
-  top: "10px",
-  right: "10px",
-  zIndex: 10,
-  background: `#000000`,
-border: `1px solid ${selectedMutation ? "#ff00ff" : theme.border}`,
-  padding: "16px",
-  borderRadius: "10px",
-  color: "#fff",
-  width: "220px",
-  fontSize: "13px",
-boxShadow: selectedMutation
-  ? "0 0 40px rgba(255,0,255,0.8)"
-  : `0 0 30px ${theme.glow}`,
-  transition: "all 0.3s ease",
-  animation: "popIn 0.25s ease",
   overflow: "hidden"
-    }}>
-      <div style={{
-        marginBottom: "10px",
+}}>
+
+  {/* TOGGLE BUTTONS */}
+  <div style={{
+    display: "flex",
+    gap: "8px",
+    padding: "12px 16px",
+    borderBottom: "1px solid #1a1a1a",
+    backgroundColor: "#0a0a0a",
+    zIndex: 20
+  }}>
+    <button
+      onClick={() => setViewMode('dna')}
+      style={{
+        padding: "6px 18px",
+        borderRadius: "6px",
+        border: "1px solid #333",
+        background: viewMode === 'dna' ? "#fff" : "transparent",
+        color: viewMode === 'dna' ? "#000" : "#888",
         fontWeight: "bold",
-        color: "#aaa",
         fontSize: "12px",
         letterSpacing: "1px",
-        borderBottom: "1px solid #222",
-        paddingBottom: "6px"
-      }}>
+        cursor: "pointer",
+        transition: "all 0.2s ease"
+      }}
+    >
+      DNA
+    </button>
+    <button
+      onClick={() => setViewMode('human')}
+      style={{
+        padding: "6px 18px",
+        borderRadius: "6px",
+        border: "1px solid #333",
+        background: viewMode === 'human' ? "#fff" : "transparent",
+        color: viewMode === 'human' ? "#000" : "#888",
+        fontWeight: "bold",
+        fontSize: "12px",
+        letterSpacing: "1px",
+        cursor: "pointer",
+        transition: "all 0.2s ease"
+      }}
+    >
+      HUMAN
+    </button>
+  </div>
 
-        <div style={{
-  position: "absolute",
-  top: 0,
-  left: 0,
-  width: "100%",
-  height: "10px",
-background: selectedMutation ? "#ff00ff" : theme.border,
-}}></div>
-        BASE INFO
+  {/* VIEWS CONTAINER */}
+{/* VIEWS CONTAINER */}
+<div style={{ flex: 1, position: "relative", height: "100%" }}>
+
+    {/* DNA VIEW */}
+    <div style={{
+      position: "absolute",
+      inset: 0,
+      visibility: viewMode === 'dna' ? 'visible' : 'hidden',
+      pointerEvents: viewMode === 'dna' ? 'auto' : 'none'
+    }}>
+      <div style={{ position: "relative", width: "100%", height: "100%" }}>
+        <div ref={mountRef} style={{ width: "100%", height: "100%" }}></div>
+        {selectedBase && viewMode === 'dna' && (
+          <div style={{
+            position: "absolute",
+            top: "10px",
+            right: "10px",
+            zIndex: 10,
+            background: `#000000`,
+            border: `1px solid ${selectedMutation ? "#ff00ff" : theme.border}`,
+            padding: "16px",
+            borderRadius: "10px",
+            color: "#fff",
+            width: "220px",
+            fontSize: "13px",
+            boxShadow: selectedMutation
+              ? "0 0 40px rgba(255,0,255,0.8)"
+              : `0 0 30px ${theme.glow}`,
+            transition: "all 0.3s ease",
+            animation: "popIn 0.25s ease",
+            overflow: "hidden"
+          }}>
+            <div style={{
+              marginBottom: "10px",
+              fontWeight: "bold",
+              color: "#aaa",
+              fontSize: "12px",
+              letterSpacing: "1px",
+              borderBottom: "1px solid #222",
+              paddingBottom: "6px"
+            }}>
+              <div style={{
+                position: "absolute",
+                top: 0, left: 0,
+                width: "100%",
+                height: "10px",
+                background: selectedMutation ? "#ff00ff" : theme.border,
+              }}></div>
+              BASE INFO
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "#777" }}>Base</span>
+              <span>{selectedBase.base}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "#777" }}>Position</span>
+              <span>{selectedBase.position}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "#777" }}>Strand</span>
+              <span>{selectedBase.strand}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "#777" }}>Pair</span>
+              <span>{selectedBase.complementBase}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px" }}>
+              <span style={{ color: "#777" }}>Mutation</span>
+              <span style={{
+                color: selectedMutation ? "#ff00ff" : "#888",
+                fontWeight: selectedMutation ? "bold" : "normal"
+              }}>
+                {selectedMutation ? `${selectedMutation.from} → ${selectedMutation.to}` : "None"}
+              </span>
+              <span style={{ color: "#777" }}>Type</span>
+              <span style={{
+                color:
+                  selectedBase?.mutationType === "insertion" ? "#ff8800" :
+                  selectedBase?.mutationType === "deletion" ? "#ff4444" : "#888",
+                fontWeight: "bold"
+              }}>
+                {selectedBase?.mutationType || "normal"}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
-
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <span style={{ color: "#777" }}>Base</span>
-        <span>{selectedBase.base}</span>
-      </div>
-
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <span style={{ color: "#777" }}>Position</span>
-        <span>{selectedBase.position}</span>
-      </div>
-
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <span style={{ color: "#777" }}>Strand</span>
-        <span>{selectedBase.strand}</span>
-      </div>
-
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <span style={{ color: "#777" }}>Pair</span>
-        <span>{selectedBase.complementBase}</span>
-      </div>
-
-<div style={{
-  display: "flex",
-  justifyContent: "space-between",
-  marginTop: "8px"
-}}>
-  <span style={{ color: "#777" }}>Mutation</span>
-
-  <span style={{
-    color: selectedMutation ? "#ff00ff" : "#888",
-    fontWeight: selectedMutation ? "bold" : "normal"
-  }}>
-    {selectedMutation
-      ? `${selectedMutation.from} → ${selectedMutation.to}`
-      : "None"}
-  </span>
-
-  <span style={{ color: "#777" }}>Type</span>
-  <span style={{
-    color:
-      selectedBase?.mutationType === "insertion" ? "#ff8800" :
-      selectedBase?.mutationType === "deletion" ? "#ff4444" :
-      "#888",
-    fontWeight: "bold"
-  }}>
-    {selectedBase?.mutationType || "normal"}
-  </span>
-
-</div>
-
     </div>
-  )}
+
+
+    {/* HUMAN VIEW */}
+{viewMode === 'human' && (
+    <div style={{
+      position: "absolute",
+      inset: 0,
+      display: viewMode === 'human' ? 'block' : 'none'
+    }}>
+      <HumanView result={result} />
+    </div>
+)}
+
+  </div>
 </div>
-
-
-      </div>
 
     </div>
   );

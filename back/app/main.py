@@ -37,7 +37,68 @@ class DNARequest(BaseModel):
     motif: str
 
 
+
+def get_organ_associations(gc, mutations, indels, motifs, prediction):
+    affected = []
+
+    # BRAIN + SPINE — high GC content
+    if gc > 60:
+        affected.append({
+            "organs": ["brain", "spine"],
+            "reason": "High GC content is associated with gene-dense neurological regions.",
+            "confidence": "Preliminary",
+            "trigger": "gc_content"
+        })
+
+    # LIVER — high substitution count
+    sub_count = len([m for m in mutations if m["from"] != "-" and m["to"] != "-"])
+    if sub_count > 3:
+        affected.append({
+            "organs": ["liver"],
+            "reason": "Multiple substitution mutations affect CYP enzyme genes expressed in the liver.",
+            "confidence": "Preliminary",
+            "trigger": "substitutions"
+        })
+
+    # HEART — insertions or deletions present
+    if len(indels) > 0:
+        affected.append({
+            "organs": ["heart"],
+            "reason": "Frameshift mutations caused by indels are linked to cardiomyopathy-associated genes.",
+            "confidence": "Preliminary",
+            "trigger": "indels"
+        })
+
+    # KIDNEY — motif found
+    if len(motifs) > 0:
+        affected.append({
+            "organs": ["kidney_left", "kidney_right"],
+            "reason": "Detected regulatory motif is associated with renal transporter gene expression.",
+            "confidence": "Preliminary",
+            "trigger": "motif"
+        })
+
+    # ALL ORGANS — high risk prediction
+    if prediction == 1:
+        affected.append({
+            "organs": ["brain", "heart", "lung_left", "lung_right", "liver", "stomach", "kidney_left", "kidney_right", "spine"],
+            "reason": "High overall mutation rate flagged as high risk across multiple systems.",
+            "confidence": "Preliminary",
+            "trigger": "high_risk"
+        })
+
+    if len(affected) == 0:
+        affected.append({
+            "organs": [],
+            "reason": "No significant mutation associations detected.",
+            "confidence": "Preliminary",
+            "trigger": "none"
+        })
+
+    return affected
+
 @app.post("/analyze")
+
 def analyze_dna(data: DNARequest):
     seq1 = clean_sequence(data.sequence1)
     seq2 = clean_sequence(data.sequence2)
@@ -88,7 +149,8 @@ def analyze_dna(data: DNARequest):
                 "to": "-"
             })
             pos += 1
-    motifs = find_motif(seq1, data.motif)
+    motif = clean_sequence(data.motif)
+    motifs = find_motif(seq1, motif) if motif else []
     gc = gc_content(seq1)
 
     features = extract_features(seq1, seq2)
@@ -181,8 +243,15 @@ def analyze_dna(data: DNARequest):
             "prediction": int(prediction),
             "interpretation": interpretation,
             "alignment": {
-    "seq1": aligned1,
-    "seq2": aligned2
-}
+                "seq1": aligned1,
+                "seq2": aligned2
+            },
+            "organ_associations": get_organ_associations(
+                gc=gc,
+                mutations=mutations,
+                indels=indels,
+                motifs=motifs,
+                prediction=int(prediction)
+            )
         }
     }

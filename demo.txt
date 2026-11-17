@@ -1,0 +1,26 @@
+demo seq
+
+1. BRAIN + SPINE (high GC):
+   Seq1: GCGCGCGCGCGCGCGCGC
+   Seq2: GCGCGCGCGCGCGCGCGC
+   Motif: (leave empty)
+
+2. LIVER (many substitutions):
+   Seq1: ATGCATGCATGCATGC
+   Seq2: TTGCTTGCTTGCTTGC
+   Motif: (leave empty)
+
+3. HEART (insertion/deletion):
+   Seq1: ATGCATGCATGC
+   Seq2: ATGCAATGCATGC
+   Motif: (leave empty)
+
+4. KIDNEY (motif found):
+   Seq1: ATGCATGATGATGC
+   Seq2: ATGCATGCTGATGC
+   Motif: ATG
+
+5. HIGH RISK (all organs):
+   Seq1: ATGATGATGATG
+   Seq2: GCGGCGGCGGCG
+   Motif: (leave empty)
